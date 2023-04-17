@@ -1,6 +1,69 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Resources:
+  privateVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.31.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+  privateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref privateVPC
+      AvailabilityZone:
+        Fn::Select:
+         - 0
+         - Fn::GetAZs: ""
+      CidrBlock: 172.31.3.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [!Ref "AWS::StackName","subnet-a"]]
+  privateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref privateVPC
+      AvailabilityZone:
+        Fn::Select:
+         - 1
+         - Fn::GetAZs: ""
+      CidrBlock: 172.31.2.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [!Ref "AWS::StackName","subnet-b"]]
+  privateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref privateVPC
+  privateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privateSubnet1
+      RouteTableId: !Ref privateRouteTable
+  privateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privateSubnet2
+      RouteTableId: !Ref privateRouteTable
+  dynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal: "*"
+          Action:
+            - "dynamodb:*"
+          Resource:
+            - "*"
+      RouteTableIds:
+        - !Ref privateRouteTable
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcId: !Ref privateVPC
   CBXEmail:
     Type: AWS::SQS::Queue
     Properties:
@@ -14,6 +77,7 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.9
       Policies:
+      - VPCAccessPolicy: {}
       - Version: '2012-10-17'
         Statement:
         - Effect: Allow
