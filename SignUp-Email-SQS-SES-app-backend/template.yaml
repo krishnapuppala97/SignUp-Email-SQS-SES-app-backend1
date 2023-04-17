@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  CBXEmail:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: CBXEmail
+    Metadata:
+      SamResourceId: CBXEmail
+  EmailVerificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - ses:SendEmail
+          Resource: '*'
+      Events:
+        CBXSignupAPIGateway:
+          Type: Api
+          Properties:
+            Path: /EmailVerificationFunction
+            Method: post
+        CBXEmailEvent:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - CBXEmail
+              - Arn
+      Environment:
+        Variables:
+          EMAIL_FROM: 18bd1a1042@gmail.com
+          EMAIL_SUBJECT: Please verify your email address for CloudBuilders Technologies
+          SES_REGION: us-east-1
+          QUEUE_URL:
+            Fn::GetAtt:
+            - CBXEmail
+            - QueueUrl
+    Metadata:
+      SamResourceId: EmailVerificationFunction
+  EmailVerificationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - EmailVerificationFunction
+        - Arn
+      Principal: sqs.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - CBXEmail
+        - Arn
+    Metadata:
+      SamResourceId: EmailVerificationFunctionPermission
+  CBXSignupAPIGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: EmailVerificationFunction
+      Principal: apigateway.amazonaws.com
+    Metadata:
+      SamResourceId: CBXSignupAPIGatewayPermission
+Outputs:
+  QueueUrl:
+    Description: URL of the SQS queue
+    Value:
+      Ref: CBXEmail
+  FunctionName:
+    Description: Name of the Lambda function
+    Value:
+      Ref: EmailVerificationFunction
